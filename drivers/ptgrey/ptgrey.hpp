@@ -136,8 +136,8 @@ struct PtGrey {
     } else if (image_type.value == "rgb") {
       pixel_format = PIXEL_FORMAT_BGR;
       cv_type = CV_8UC3;
-      settings.pixelFormat = PIXEL_FORMAT_RAW8;
-      // settings.pixelFormat = PIXEL_FORMAT_RGB8;
+      // settings.pixelFormat = PIXEL_FORMAT_RAW8;
+      settings.pixelFormat = PIXEL_FORMAT_RGB8;
     } else {
       return;
     }

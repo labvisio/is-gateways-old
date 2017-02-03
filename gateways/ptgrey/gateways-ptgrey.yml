@@ -1,0 +1,27 @@
+gateway-camera-ptgrey.0:
+    image: mendonca/gateway-ptgrey:latest
+    autodestroy: always
+    net: host
+    restart: always
+    command: /opt/ptgrey -u amqp://192.168.1.133 -i 192.168.1.100 -e ptgrey.0
+
+gateway-camera-ptgrey.1:
+    image: mendonca/gateway-ptgrey:latest
+    autodestroy: always
+    net: host
+    restart: always
+    command: /opt/ptgrey -u amqp://192.168.1.133 -i 192.168.1.101 -e ptgrey.1
+
+gateway-camera-ptgrey.2:
+    image: mendonca/gateway-ptgrey:latest
+    autodestroy: always
+    net: host
+    restart: always
+    command: /opt/ptgrey -u amqp://192.168.1.133 -i 192.168.0.102 -e ptgrey.2
+
+gateway-camera-ptgrey.3:
+    image: mendonca/gateway-ptgrey:latest
+    autodestroy: always
+    net: host
+    restart: always
+    command: /opt/ptgrey -u amqp://192.168.1.133 -i 192.168.0.103 -e ptgrey.3
