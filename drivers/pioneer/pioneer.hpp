@@ -16,6 +16,14 @@
 #include <mutex>
 #include <thread>
 
+#ifndef isnan
+#if __cplusplus <= 199711L  // c++98 or older
+  #define isnan(x) ::isnan(x)
+#else
+  #define isnan(x) std::isnan(x)
+#endif
+#endif
+
 #include <Aria/Aria.h>
 
 namespace is {
@@ -93,9 +101,13 @@ struct Pioneer {
 
   Pose get_pose() {
     robot.lock();
-    ArPose pose = robot.getPose();
+    ArPose arpose = robot.getPose();
     robot.unlock();
-    return Pose{Point{pose.getX(), pose.getY()}, deg2rad(pose.getTh())};
+    Pose pose;
+    pose.position.x = arpose.getX();
+    pose.position.y = arpose.getY();
+    pose.heading = deg2rad(arpose.getTh());
+    return pose;
   }
 
   void set_pose(Pose const& pose) {
