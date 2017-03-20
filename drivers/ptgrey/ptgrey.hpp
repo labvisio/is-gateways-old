@@ -63,6 +63,17 @@ struct PtGrey {
     }
   }
 
+  void start_capture() {
+    if (!camera.IsConnected()) {
+      camera.Connect(handle);
+    }
+    camera.StartCapture();
+  }
+
+  void stop_capture() {
+    camera.StopCapture();
+  }
+
   void set_sample_rate(SamplingRate sample_rate) {
     std::lock_guard<std::mutex> lock(mutex);
 

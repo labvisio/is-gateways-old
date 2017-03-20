@@ -59,7 +59,7 @@ struct Camera {
         }
       }
     });
-    
+
     // clang-format on
 
     while (1) {
@@ -68,7 +68,12 @@ struct Camera {
       CompressedImage image;
       image.format = ".png";
       cv::imencode(image.format, frame, image.data);
-      is.publish(name + ".frame", is::msgpack(image));      
+      if (!is.publish(name + ".frame", is::msgpack(image), "data", true)) {
+        camera.stop_capture();
+        is.wait_event("binding.created",
+                      [&](auto headers) { return name + ".frame" == headers["routing_key"].GetString(); });
+        camera.start_capture();
+      }
       is.publish(name + ".timestamp", is::msgpack(timestamp));
     }
 
