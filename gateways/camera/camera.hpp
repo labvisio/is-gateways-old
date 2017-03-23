@@ -5,6 +5,7 @@
 #include <is/msgs/camera.hpp>
 #include <is/msgs/common.hpp>
 #include <is/msgs/cv.hpp>
+#include <is/theora-encoder.hpp>
 
 namespace is {
 namespace gw {
@@ -14,74 +15,90 @@ using namespace is::msg::camera;
 
 template <typename ThreadSafeCameraDriver>
 struct Camera {
-  is::Connection is;
+  Connection is;
+  DataPublisher publisher;
+  ServiceProvider service;
 
-  // clang-format off
-  Camera(std::string const& name, std::string const& uri, ThreadSafeCameraDriver & camera) : is(is::connect(uri)) {
-    auto thread = is::advertise(uri, name, {
-      {
-        "set_sample_rate", [&](is::Request request) -> is::Reply {
-          camera.set_sample_rate(is::msgpack<SamplingRate>(request));
-          return is::msgpack(status::ok);
-        }
-      },
-      {
-        "set_resolution", [&](is::Request request) -> is::Reply {
-          camera.set_resolution(is::msgpack<Resolution>(request));
-          return is::msgpack(status::ok);
-        }
-      },
-      {
-        "set_image_type", [&](is::Request request) -> is::Reply {
-          camera.set_image_type(is::msgpack<ImageType>(request));
-          return is::msgpack(status::ok);
-        }
-      },
-      {
-        "set_delay", [&](is::Request request) -> is::Reply {
-          camera.set_delay(is::msgpack<Delay>(request));
-          return is::msgpack(status::ok);
-        }
-      },
-      {
-        "get_sample_rate", [&](is::Request) -> is::Reply {
-          return is::msgpack(camera.get_sample_rate());
-        }
-      },
-      {
-        "get_resolution", [&](is::Request) -> is::Reply {
-          return is::msgpack(camera.get_resolution());
-        }
-      },
-      {
-        "get_image_type", [&](is::Request) -> is::Reply {
-          return is::msgpack(camera.get_image_type());
-        }
-      }
+  TheoraEncoder encoder;
+
+  Camera(std::string const& name, std::string const& uri, ThreadSafeCameraDriver& camera)
+      : is(is::connect(uri)), publisher(is), service(name, make_channel(uri)) {
+    service.expose("set_sample_rate", [&camera](is::Request request) -> is::Reply {
+      camera.set_sample_rate(is::msgpack<SamplingRate>(request));
+      return is::msgpack(status::ok);
     });
 
-    // clang-format on
+    service.expose("set_resolution", [&camera](is::Request request) -> is::Reply {
+      camera.set_resolution(is::msgpack<Resolution>(request));
+      return is::msgpack(status::ok);
+    });
 
-    while (1) {
-      cv::Mat frame = camera.get_frame();
-      Timestamp timestamp = camera.get_last_timestamp();
+    service.expose("set_image_type", [&camera](is::Request request) -> is::Reply {
+      camera.set_image_type(is::msgpack<ImageType>(request));
+      return is::msgpack(status::ok);
+    });
+
+    service.expose("set_delay", [&camera](is::Request request) -> is::Reply {
+      camera.set_delay(is::msgpack<Delay>(request));
+      return is::msgpack(status::ok);
+    });
+
+    service.expose("get_headers", [this](is::Request) {
+      auto headers = encoder.get_headers();
+      return is::msgpack(headers);  // get_headers is thread safe
+    });
+
+    service.expose("get_sample_rate", [&camera](is::Request) -> is::Reply {
+      return is::msgpack(camera.get_sample_rate());
+    });
+
+    service.expose("get_resolution", [&camera](is::Request) -> is::Reply {
+      return is::msgpack(camera.get_resolution());
+    });
+
+    service.expose("get_image_type", [&camera](is::Request) -> is::Reply {
+      return is::msgpack(camera.get_image_type());
+    });
+
+    publisher.add(name + ".frame", [&camera]() {
+      auto frame = camera.get_last_frame();
       CompressedImage image;
       image.format = ".png";
       cv::imencode(image.format, frame, image.data);
-      if (!is.publish(name + ".frame", is::msgpack(image), "data", true)) {
-        camera.stop_capture();
-        is.wait_event("binding.created",
-                      [&](auto headers) { return name + ".frame" == headers["routing_key"].GetString(); });
-        camera.start_capture();
+      return is::msgpack(image);
+    });
+
+    publisher.add(name + ".theora", [this, &camera]() {
+      auto frame = camera.get_last_frame().clone();
+      auto packets = encoder.encode(frame);
+      return is::msgpack(packets);
+    });
+
+    publisher.add(name + ".timestamp",
+                  [this, &camera]() { return is::msgpack(camera.get_last_timestamp()); });
+
+    std::thread thread([this, &camera]() { service.listen(); });
+
+    for (;;) {
+      try {
+        camera.update();
+        auto n = publisher.publish();
+        if (n == 0) {
+          camera.stop_capture();
+        } else {
+          camera.start_capture();
+        }
+      } catch (...) {
+        is::log::warn(":(");
       }
-      is.publish(name + ".timestamp", is::msgpack(timestamp));
     }
 
     thread.join();
   }
-};
+
+};  // ::Camera
 
 }  // ::gw
 }  // ::is
 
-#endif // __IS_GW_CAMERA_HPP__
+#endif  // __IS_GW_CAMERA_HPP__
