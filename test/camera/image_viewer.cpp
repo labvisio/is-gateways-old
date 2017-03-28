@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
   while (client.receive_for(1s) != nullptr) {
   }
 
-  auto frames = is.subscribe({entity + ".frame"});
+  auto frames = is.subscribe(entity + ".frame");
 
   while (1) {
     auto message = is.consume(frames);

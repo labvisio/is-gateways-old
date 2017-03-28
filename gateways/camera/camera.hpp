@@ -17,7 +17,7 @@ struct Camera {
   is::Connection is;
 
   // clang-format off
-  Camera(std::string const& name, std::string const& uri, ThreadSafeCameraDriver & camera) : is(is::connect(uri)) {
+  Camera(std::string const& name, std::string const& uri, std::string const& format, ThreadSafeCameraDriver & camera) : is(is::connect(uri)) {
     auto thread = is::advertise(uri, name, {
       {
         "set_sample_rate", [&](is::Request request) -> is::Reply {
@@ -66,7 +66,7 @@ struct Camera {
       cv::Mat frame = camera.get_frame();
       Timestamp timestamp = camera.get_last_timestamp();
       CompressedImage image;
-      image.format = ".png";
+      image.format = "." + format;
       cv::imencode(image.format, frame, image.data);
       if (!is.publish(name + ".frame", is::msgpack(image), "data", true)) {
         camera.stop_capture();
