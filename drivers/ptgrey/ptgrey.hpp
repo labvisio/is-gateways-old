@@ -64,6 +64,7 @@ struct PtGrey {
   }
 
   void start_capture() {
+    std::lock_guard<std::mutex> lock(mutex);
     if (!camera.IsConnected()) {
       camera.Connect(handle);
     }
@@ -71,6 +72,7 @@ struct PtGrey {
   }
 
   void stop_capture() {
+    std::lock_guard<std::mutex> lock(mutex);
     camera.StopCapture();
   }
 
