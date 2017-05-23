@@ -42,8 +42,12 @@ struct PtGrey {
   PixelFormat pixel_format;
   int cv_type;
   Timestamp last_timestamp;
+  cv::Mat last_frame;
 
   ErrorLogger error;
+
+  enum State { STOPPED, CAPTURING };
+  State state;
 
   PtGrey(std::string const& ip) : handle(new PGRGuid()) {
     BusManager bus;
@@ -52,8 +56,11 @@ struct PtGrey {
     set_packet_delay(6000);
     set_packet_size(1400);
     set_image_type(image_type::rgb);
-    set_sample_rate({1.0});
+    is::msg::common::SamplingRate rate;
+    rate.rate = 1.0;
+    set_sample_rate(rate);
     camera.StartCapture();
+    state = CAPTURING;
   }
 
   ~PtGrey() {
@@ -65,15 +72,24 @@ struct PtGrey {
 
   void start_capture() {
     std::lock_guard<std::mutex> lock(mutex);
-    if (!camera.IsConnected()) {
-      camera.Connect(handle);
+    if (state == STOPPED) {
+      if (!camera.IsConnected()) {
+        camera.Connect(handle);
+      }
+      camera.StartCapture();
+      state = CAPTURING;
+      is::log::info("Starting capture");
     }
     camera.StartCapture();
   }
 
   void stop_capture() {
     std::lock_guard<std::mutex> lock(mutex);
-    camera.StopCapture();
+    if (state == CAPTURING) {
+      is::log::info("Stopping capture");
+      camera.StopCapture();
+      state = STOPPED;
+    }
   }
 
   void set_sample_rate(SamplingRate sample_rate) {
@@ -127,12 +143,12 @@ struct PtGrey {
     Mode mode;
     camera.GetGigEImagingMode(&mode);
     switch (mode) {
-      case MODE_0:
-        return {1288, 728};
-      case MODE_1:
-        return {644, 364};
-      default:
-        return {0, 0};
+    case MODE_0:
+      return {1288, 728};
+    case MODE_1:
+      return {644, 364};
+    default:
+      return {0, 0};
     }
   }
 
@@ -140,7 +156,7 @@ struct PtGrey {
     std::lock_guard<std::mutex> lock(mutex);
     GigEImageSettings settings;
     error = camera.GetGigEImageSettings(&settings);
-    
+
     boost::algorithm::to_lower(image_type.value);
     if (image_type.value == "gray") {
       pixel_format = PIXEL_FORMAT_MONO8;
@@ -178,18 +194,24 @@ struct PtGrey {
     error = camera.SetProperty(&property);
   }
 
-  cv::Mat get_frame() {
+  void update() {
     std::lock_guard<std::mutex> lock(mutex);
+    if (state == CAPTURING) {
+      Image buffer, image;
+      error = camera.RetrieveBuffer(&buffer);
+      last_timestamp = Timestamp();
+      buffer.Convert(pixel_format, &image);
+      cv::Mat frame(image.GetRows(), image.GetCols(), cv_type, image.GetData(),
+                    image.GetDataSize() / image.GetRows());
+      last_frame = frame.clone();
+      buffer.ReleaseBuffer();
+      image.ReleaseBuffer();
+    }
+  }
 
-    Image buffer, image;
-    error = camera.RetrieveBuffer(&buffer);
-    last_timestamp = Timestamp();
-    buffer.Convert(pixel_format, &image);
-    cv::Mat frame(image.GetRows(), image.GetCols(), cv_type, image.GetData(), image.GetDataSize() / image.GetRows());
-    frame = frame.clone();
-    buffer.ReleaseBuffer();
-    image.ReleaseBuffer();
-    return frame;
+  cv::Mat get_last_frame() {
+    std::lock_guard<std::mutex> lock(mutex);
+    return last_frame;
   }
 
   Timestamp get_last_timestamp() {
