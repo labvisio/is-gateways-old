@@ -21,7 +21,8 @@ struct Camera {
 
   TheoraEncoder encoder;
 
-  Camera(std::string const& name, std::string const& uri, std::string const& format, ThreadSafeCameraDriver& camera)
+  Camera(std::string const& name, std::string const& uri, std::string const& format,
+         ThreadSafeCameraDriver& camera)
       : is(is::connect(uri)), publisher(is), service(name, make_channel(uri)) {
     service.expose("set_sample_rate", [&camera](is::Request request) -> is::Reply {
       camera.set_sample_rate(is::msgpack<SamplingRate>(request));
@@ -58,6 +59,36 @@ struct Camera {
 
     service.expose("get_image_type", [&camera](is::Request) -> is::Reply {
       return is::msgpack(camera.get_image_type());
+    });
+
+    service.expose("get_delay", [&camera](is::Request) -> is::Reply {
+      return is::msgpack(camera.get_delay());
+    });
+
+    service.expose("set_configuration", [&camera](is::Request request) -> is::Reply {
+      auto configuration = is::msgpack<Configuration>(request);
+      if (configuration.resolution) camera.set_resolution(configuration.resolution.get());
+      if (configuration.sampling_rate) camera.set_sample_rate(configuration.sampling_rate.get());
+      if (configuration.image_type) camera.set_image_type(configuration.image_type.get());
+      if (configuration.brightness) camera.set_brightness(configuration.brightness.get());
+      if (configuration.exposure) camera.set_exposure(configuration.exposure.get());
+      if (configuration.shutter) camera.set_shutter(configuration.shutter.get());
+      if (configuration.gain) camera.set_gain(configuration.gain.get());
+      if (configuration.white_balance) camera.set_white_balance(configuration.white_balance.get());
+      return is::msgpack(status::ok);
+    });
+
+    service.expose("get_configuration", [&camera](is::Request) -> is::Reply {
+      Configuration configuration;
+      configuration.resolution = camera.get_resolution();
+      configuration.sampling_rate = camera.get_sample_rate();
+      configuration.image_type = camera.get_image_type();
+      configuration.brightness = camera.get_brightness();
+      configuration.exposure = camera.get_exposure();
+      configuration.shutter = camera.get_shutter();
+      configuration.gain = camera.get_gain();
+      configuration.white_balance = camera.get_white_balance();
+      return is::msgpack(configuration);
     });
 
     publisher.add(name + ".frame", [&camera, &format]() {

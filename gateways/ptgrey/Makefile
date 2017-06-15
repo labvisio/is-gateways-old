@@ -6,7 +6,7 @@ SO_DEPS += -lboost_program_options -lpthread -lflycapture
 
 TARGET=ptgrey
 SERVICE=gateway-ptgrey
-VERSION=0.0.1
+VERSION=0.0.3
 DOCKER_USER=mendonca
 
 all: $(TARGET)
